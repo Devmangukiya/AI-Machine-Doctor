@@ -55,7 +55,8 @@ class VirtualMachine:
         self.machine_id = MACHINE_ID
         self.machine_type = MACHINE_TYPE
         self.plant_id = PLANT_ID
-
+        self.last_events = []
+        self.last_alarms = []
         # ------------------------------------------------------------
         # Random generator
         # ------------------------------------------------------------
@@ -378,6 +379,8 @@ class VirtualMachine:
 
         events = self.generate_events(scenario)
 
+        self.last_events = events
+        self.last_alarms = alarms
         # ------------------------------------------------------------
         # Machine state
         # ------------------------------------------------------------

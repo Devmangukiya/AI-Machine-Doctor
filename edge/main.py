@@ -4,7 +4,9 @@ Run the Edge Gateway with the virtual machine.
 
 import json
 import time
+
 from .mqtt_client import MQTTClient
+
 from simulator.machine import VirtualMachine
 
 from .config import (
@@ -49,7 +51,7 @@ def main():
     print()
 
     print(
-        "Simulator → Edge Gateway"
+        "Simulator → Edge Gateway → MQTT"
     )
 
     print("=" * 60)
@@ -58,17 +60,20 @@ def main():
 
         while True:
 
-            # ------------------------------------------------
-            # 1. Get machine data
-            # ------------------------------------------------
+            # =================================================
+            # 1. Get machine data from simulator
+            # =================================================
 
             machine_data = (
                 machine.generate_telemetry()
             )
 
-            # ------------------------------------------------
+            # =================================================
             # 2. Simulate raw industrial input
-            # ------------------------------------------------
+            #
+            # In the real world this section will eventually
+            # receive data from PLC / OPC UA / Modbus etc.
+            # =================================================
 
             raw_data = RawMachineData(
 
@@ -123,28 +128,95 @@ def main():
                 ),
             )
 
-            # ------------------------------------------------
-            # 3. Process through Edge
-            # ------------------------------------------------
+            # =================================================
+            # 3. Process through Edge Gateway
+            # =================================================
 
             telemetry = gateway.process(
                 raw_data
             )
 
-            topic = (
-                f"machine/{telemetry.machine_id}/telemetry"
+            # =================================================
+            # 6. Publish EVENTS
+            # =================================================
+
+            events_topic = (
+                f"machine/"
+                f"{telemetry.machine_id}"
+                f"/events"
+            )
+
+            for event in machine.last_events:
+
+                mqtt.publish(
+                    topic=events_topic,
+                    payload=event.model_dump(
+                        mode="json"
+                    ),
+                )
+
+            # =================================================
+            # 7. Publish ALARMS
+            # =================================================
+
+            alarms_topic = (
+                f"machine/"
+                f"{telemetry.machine_id}"
+                f"/alarms"
+            )
+
+            for alarm in machine.last_alarms:
+
+                mqtt.publish(
+                    topic=alarms_topic,
+                    payload=alarm.model_dump(
+                        mode="json"
+                    ),
+                )
+
+            # =================================================
+            # 4. Publish TELEMETRY
+            # =================================================
+
+            telemetry_topic = (
+                f"machine/"
+                f"{telemetry.machine_id}"
+                f"/telemetry"
             )
 
             mqtt.publish(
-                topic=topic,
+                topic=telemetry_topic,
                 payload=telemetry.model_dump(
                     mode="json"
                 ),
             )
 
-            # ------------------------------------------------
-            # 4. Display normalized telemetry
-            # ------------------------------------------------
+            # =================================================
+            # 5. Publish MACHINE STATE
+            # =================================================
+
+            state_topic = (
+                f"machine/"
+                f"{telemetry.machine_id}"
+                f"/state"
+            )
+
+            state_payload = {
+                "machine_id": telemetry.machine_id,
+                "timestamp": telemetry.timestamp.isoformat(),
+                "state": telemetry.state,
+            }
+
+            mqtt.publish(
+                topic=state_topic,
+                payload=state_payload,
+            )
+
+            # =================================================
+            # 6. Display normalized telemetry
+            # =================================================
+
+            print()
 
             print(
                 json.dumps(
@@ -154,7 +226,23 @@ def main():
                 )
             )
 
+            print()
+
+            print(
+                f"[MQTT] Telemetry → "
+                f"{telemetry_topic}"
+            )
+
+            print(
+                f"[MQTT] State → "
+                f"{state_topic}"
+            )
+
             print("-" * 60)
+
+            # =================================================
+            # 7. Wait before next machine reading
+            # =================================================
 
             time.sleep(
                 PROCESS_INTERVAL_SECONDS
